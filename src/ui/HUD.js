@@ -163,11 +163,48 @@ export class HUD {
 
   // ── Game Over ─────────────────────────────────────────────
 
-  showGameOver(score, wave, kills) {
+  /**
+   * @param {number}      score
+   * @param {number}      wave
+   * @param {number}      kills
+   * @param {number|null} rank      - posição no ranking (opcional)
+   * @param {object|null} rankTier  - objeto da tier (opcional)
+   */
+  showGameOver(score, wave, kills, rank = null, rankTier = null) {
     this._gameOverPanel.style.display = 'flex';
-    this._finalScore.innerHTML =
-      `Pontuação Final: <strong style="color:#f5c518">${score.toLocaleString('pt-BR')}</strong><br>
-       Onda: <strong>${wave}</strong> &nbsp;|&nbsp; Abates: <strong>${kills}</strong>`;
+
+    const TIER_STYLE = {
+      legend:   { color:'#FFD700', emoji:'👑' },
+      diamond:  { color:'#B9F2FF', emoji:'💎' },
+      platinum: { color:'#E5E4E2', emoji:'🏆' },
+      gold:     { color:'#FFA500', emoji:'🥇' },
+      silver:   { color:'#C0C0C0', emoji:'🥈' },
+      bronze:   { color:'#CD7F32', emoji:'🥉' },
+    };
+
+    let rankHtml = '';
+    if (rank) {
+      const ts = rankTier ? (TIER_STYLE[rankTier.id] || {}) : {};
+      rankHtml = `
+        <div style="margin:10px 0;padding:10px 18px;background:rgba(255,215,0,.08);
+                    border:1px solid rgba(255,215,0,.25);border-radius:8px;text-align:center">
+          <div style="font-size:.8rem;color:#aaa;letter-spacing:.1em;margin-bottom:4px">SEU RANK NO RANKING MENSAL</div>
+          <div style="font-size:1.6rem;font-weight:800;color:#FFD700">
+            ${ts.emoji || '🎮'} #${rank}
+            ${rankTier ? `<span style="font-size:.9rem;color:${ts.color || '#fff'}">${rankTier.label || ''}</span>` : ''}
+          </div>
+          <div style="font-size:.75rem;color:#aaa;margin-top:4px">
+            ${rank <= 100 ? '🪂 Você está elegível para recompensas diárias!' : 'Continue jogando para entrar no top 100!'}
+          </div>
+        </div>`;
+    }
+
+    this._finalScore.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+        <div>Pontuação: <strong style="color:#f5c518;font-size:1.3rem">${score.toLocaleString('pt-BR')}</strong></div>
+        <div style="font-size:.9rem;color:#aaa">Onda ${wave} &nbsp;|&nbsp; ${kills} abates</div>
+        ${rankHtml}
+      </div>`;
   }
 
   hideGameOver() {
