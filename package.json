@@ -1,0 +1,19 @@
+{
+  "name": "shadow-strike-fps",
+  "version": "2.0.0",
+  "description": "Jogo FPS (First Person Shooter) rodando diretamente no navegador, construído com **Three.js** e **JavaScript ES Modules** puro — sem bundler necessário.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node server/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^12.9.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "uuid": "^13.0.0"
+  }
+}

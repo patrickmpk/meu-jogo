@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shadow Strike — FPS WebGL</title>
+  <link rel="icon" type="image/svg+xml" href="/public/favicon.svg" />
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #000;
+      overflow: hidden;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      color: #fff;
+    }
+
+    canvas#gameCanvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    /* ── Overlay / Menu ───────────────────────────────────── */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,.82);
+      z-index: 100;
+      gap: 18px;
+      backdrop-filter: blur(4px);
+      transition: opacity .35s;
+    }
+
+    #overlay.hidden { opacity: 0; pointer-events: none; }
+
+    #overlay h1 {
+      font-size: clamp(2rem, 6vw, 4rem);
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      color: #e8413b;
+      text-shadow: 0 0 24px #e8413b99, 0 2px 0 #000;
+    }
+
+    #overlay p.subtitle {
+      font-size: 1rem;
+      color: #aaa;
+      letter-spacing: .08em;
+    }
+
+    #startBtn, #restartBtn {
+      margin-top: 8px;
+      padding: 14px 48px;
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      background: #e8413b;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      box-shadow: 0 0 24px #e8413b88;
+      transition: background .2s, box-shadow .2s, transform .1s;
+    }
+
+    #startBtn:hover, #restartBtn:hover {
+      background: #ff5c56;
+      box-shadow: 0 0 36px #e8413bbb;
+      transform: scale(1.04);
+    }
+
+    .controls-hint {
+      margin-top: 4px;
+      font-size: .82rem;
+      color: #777;
+      text-align: center;
+      line-height: 1.7;
+    }
+
+    /* ── HUD ──────────────────────────────────────────────── */
+    #hud {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+      display: none;
+    }
+
+    /* Crosshair */
+    #crosshair {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 24px; height: 24px;
+    }
+
+    #crosshair::before, #crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(255,255,255,.85);
+    }
+
+    #crosshair::before { /* horizontal */
+      width: 100%; height: 2px;
+      top: 50%; left: 0;
+      transform: translateY(-50%);
+    }
+
+    #crosshair::after { /* vertical */
+      height: 100%; width: 2px;
+      left: 50%; top: 0;
+      transform: translateX(-50%);
+    }
+
+    /* Center dot */
+    #crosshair span {
+      position: absolute;
+      top: 50%; left: 50%;
+      width: 4px; height: 4px;
+      background: #e8413b;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    /* Bottom bar */
+    #hudBottom {
+      position: absolute;
+      bottom: 28px;
+      left: 0; right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding: 0 36px;
+    }
+
+    .hud-panel {
+      background: rgba(0,0,0,.55);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 6px;
+      padding: 10px 20px;
+      backdrop-filter: blur(6px);
+      min-width: 140px;
+    }
+
+    .hud-label {
+      font-size: .65rem;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 4px;
+    }
+
+    .hud-value {
+      font-size: 1.7rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    /* Health bar */
+    #healthBar {
+      width: 180px;
+      height: 8px;
+      background: rgba(255,255,255,.15);
+      border-radius: 4px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+
+    #healthFill {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #4caf50, #8bc34a);
+      border-radius: 4px;
+      transition: width .3s, background .3s;
+    }
+
+    #healthValue { color: #4caf50; }
+    #ammoValue   { color: #fff; }
+    #scoreValue  { color: #f5c518; }
+
+    /* Ammo indicator (bullet icons) */
+    #ammoIcons {
+      display: flex;
+      gap: 4px;
+      margin-top: 5px;
+      flex-wrap: wrap;
+      max-width: 160px;
+    }
+
+    .bullet-icon {
+      width: 6px; height: 14px;
+      background: #aaa;
+      border-radius: 2px;
+      transition: background .2s;
+    }
+
+    .bullet-icon.empty { background: #333; }
+
+    /* Kill feed */
+    #killFeed {
+      position: absolute;
+      top: 20px;
+      right: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: flex-end;
+    }
+
+    .kill-msg {
+      background: rgba(232,65,59,.75);
+      padding: 4px 12px;
+      border-radius: 3px;
+      font-size: .82rem;
+      font-weight: 600;
+      animation: fadeOut 2.5s forwards;
+    }
+
+    @keyframes fadeOut {
+      0%   { opacity: 1; transform: translateX(0); }
+      70%  { opacity: 1; }
+      100% { opacity: 0; transform: translateX(20px); }
+    }
+
+    /* Hit flash */
+    #hitFlash {
+      position: absolute;
+      inset: 0;
+      background: rgba(220,30,30,.35);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .08s;
+    }
+
+    /* Wave notification */
+    #waveNotif {
+      position: absolute;
+      top: 18%;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: .12em;
+      color: #f5c518;
+      text-shadow: 0 0 20px #f5c51899;
+      opacity: 0;
+      transition: opacity .4s;
+      text-align: center;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    /* Reload bar */
+    #reloadBar {
+      position: absolute;
+      bottom: 110px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 180px;
+      background: rgba(0,0,0,.6);
+      border: 1px solid rgba(255,255,255,.2);
+      border-radius: 4px;
+      overflow: hidden;
+      display: none;
+    }
+
+    #reloadFill {
+      height: 6px;
+      width: 0%;
+      background: #f5c518;
+      transition: width linear;
+    }
+
+    #reloadLabel {
+      font-size: .7rem;
+      letter-spacing: .1em;
+      text-align: center;
+      padding: 3px 0 2px;
+      color: #ccc;
+    }
+
+    /* Pause/escape message */
+    #pauseMsg {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,.7);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 8px;
+      padding: 24px 48px;
+      text-align: center;
+      display: none;
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: .1em;
+    }
+
+    /* Game over overlay */
+    #gameOverPanel {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: rgba(0,0,0,.75);
+      display: none;
+    }
+
+    #gameOverPanel h2 {
+      font-size: 3rem;
+      color: #e8413b;
+      text-shadow: 0 0 30px #e8413b;
+      letter-spacing: .15em;
+    }
+
+    #finalScore {
+      font-size: 1.3rem;
+      color: #f5c518;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Canvas -->
+<canvas id="gameCanvas"></canvas>
+
+<!-- Main menu overlay -->
+<div id="overlay">
+  <h1>🔫 Shadow Strike</h1>
+  <p class="subtitle">First Person Shooter · WebGL</p>
+  <button id="startBtn">Iniciar Jogo</button>
+  <div class="controls-hint">
+    WASD — Mover &nbsp;|&nbsp; Mouse — Mirar &nbsp;|&nbsp; LMB — Atirar<br>
+    R — Recarregar &nbsp;|&nbsp; Shift — Correr &nbsp;|&nbsp; ESC — Pausar
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <!-- Crosshair -->
+  <div id="crosshair"><span></span></div>
+
+  <!-- Hit flash overlay -->
+  <div id="hitFlash"></div>
+
+  <!-- Wave notification -->
+  <div id="waveNotif"></div>
+
+  <!-- Reload bar -->
+  <div id="reloadBar">
+    <div id="reloadLabel">RECARREGANDO</div>
+    <div id="reloadFill"></div>
+  </div>
+
+  <!-- Pause message -->
+  <div id="pauseMsg">⏸ PAUSADO<br><small style="font-size:.9rem;color:#888">Clique para continuar</small></div>
+
+  <!-- Kill feed -->
+  <div id="killFeed"></div>
+
+  <!-- Bottom HUD bar -->
+  <div id="hudBottom">
+    <!-- Health -->
+    <div class="hud-panel">
+      <div class="hud-label">Vida</div>
+      <div class="hud-value" id="healthValue">100</div>
+      <div id="healthBar"><div id="healthFill"></div></div>
+    </div>
+
+    <!-- Score / Wave -->
+    <div class="hud-panel" style="text-align:center">
+      <div class="hud-label">Pontuação</div>
+      <div class="hud-value" id="scoreValue">0</div>
+      <div class="hud-label" style="margin-top:6px">Onda <span id="waveValue">1</span></div>
+    </div>
+
+    <!-- Ammo -->
+    <div class="hud-panel" style="text-align:right">
+      <div class="hud-label">Munição</div>
+      <div class="hud-value" id="ammoValue">30 / 90</div>
+      <div id="ammoIcons"></div>
+    </div>
+  </div>
+
+  <!-- Game Over -->
+  <div id="gameOverPanel">
+    <h2>GAME OVER</h2>
+    <div id="finalScore"></div>
+    <button id="restartBtn">Jogar Novamente</button>
+  </div>
+</div>
+
+<!-- Three.js via CDN (importmap) -->
+<script type="importmap">
+{
+  "imports": {
+    "three":          "https://unpkg.com/three@0.164.1/build/three.module.js",
+    "three/addons/":  "https://unpkg.com/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+
+<!-- Game entry point -->
+<script type="module" src="src/main.js"></script>
+
+</body>
+</html>
