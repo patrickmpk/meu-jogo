@@ -19,6 +19,7 @@ import { Weapon }          from './entities/Weapon.js';
 import { HUD }             from './ui/HUD.js';
 import { MenuUI }          from './ui/MenuUI.js';
 import { API, Session }    from './ui/api.js';
+import { getAvailableWeapons } from './entities/WeaponSystem.js';
 
 // Estados globais do jogo
 const GAME_STATE = {
@@ -32,7 +33,6 @@ export class Game {
   constructor() {
     this.state = GAME_STATE.MENU;
 
-    // ── Elemento canvas ────────────────────────────────────
     this._canvas  = document.getElementById('gameCanvas');
     this._overlay = document.getElementById('overlay');
 
@@ -46,49 +46,36 @@ export class Game {
     this.menuUI = new MenuUI();
     this.menuUI.onStartGame = () => this.startGame();
 
-    // Atalhos
     this.scene  = this.renderer.scene;
     this.camera = this.renderer.camera;
 
-    // ── Bind loop ──────────────────────────────────────────
     this.renderer.onUpdate = (dt) => this._update(dt);
 
-    // ── Pointer lock callbacks ─────────────────────────────
     this.input.onLock   = () => this._onPointerLock();
     this.input.onUnlock = () => this._onPointerUnlock();
 
-    // ── Botão de restart (no HUD game over) ───────────────
     document.addEventListener('click', (e) => {
       if (e.target.id === 'restartBtn') this.restartGame();
     });
 
-    // ── Inicia o loop de renderização ─────────────────────
     this.renderer.start();
-
-    // ── Cronômetro da partida ──────────────────────────────
     this._gameStartTime = 0;
   }
 
   // ── Ciclo de vida do jogo ─────────────────────────────────
 
   startGame() {
-    // Inicializa o áudio (precisa de interação do usuário)
     this.audio.init();
-
-    // Constrói o mundo
     this._buildWorld();
 
-    // Mostra HUD, esconde menu
     this._overlay.classList.add('hidden');
     this.hud.show();
 
-    // Solicita pointer lock
     this.input.requestLock(this._canvas);
 
     this.state = GAME_STATE.PLAYING;
     this._gameStartTime = Date.now();
 
-    // Iniciar primeira onda
     this.enemyManager.startWave(1);
     this.hud.setWave(1);
     this.hud.showWaveNotification(1);
@@ -96,7 +83,6 @@ export class Game {
   }
 
   restartGame() {
-    // Limpa mundo anterior
     this._destroyWorld();
     this.hud.hideGameOver();
     this.startGame();
@@ -121,10 +107,17 @@ export class Game {
     this.weapon.onAmmoChange = (mag, res) => {
       this.hud.setAmmo(mag, res, this.weapon.ammoInfo.maxMag);
     };
+    this.weapon.onWeaponChange = (cfg) => {
+      this.hud.setWeaponName(cfg.name);
+      this.hud.setAmmo(this.weapon.ammoInfo.mag, this.weapon.ammoInfo.reserve, this.weapon.ammoInfo.maxMag);
+    };
 
-    // ── Input: tiro e recarga ──────────────────────────────
+    // ── Input: tiro, recarga e troca de arma ──────────────
     this.input.onShoot  = () => { if (this.state === GAME_STATE.PLAYING) this.weapon.shoot(); };
     this.input.onReload = () => { if (this.state === GAME_STATE.PLAYING) this.weapon.startReload(); };
+    this.input.onWeaponSelect = (index) => {
+      if (this.state === GAME_STATE.PLAYING) this.weapon.selectWeaponByIndex(index);
+    };
 
     // ── Partículas ─────────────────────────────────────────
     this.particles = new ParticleSystem(this.scene);
@@ -136,20 +129,26 @@ export class Game {
       this.collision
     );
 
-    this.enemyManager.onEnemyDie = (enemy, pts) => this._onEnemyDie(enemy, pts);
-    this.enemyManager.onWaveComplete = (w) => this._onWaveComplete(w);
-    this.enemyManager.onWaveStart    = (w) => {
+    this.enemyManager.onEnemyDie      = (enemy, pts) => this._onEnemyDie(enemy, pts);
+    this.enemyManager.onWaveComplete   = (w)   => this._onWaveComplete(w);
+    this.enemyManager.onAmmoBoxCollect = (amt) => this._onAmmoCollect(amt);
+    this.enemyManager.onWaveStart      = (w)   => {
       this.hud.setWave(w);
       this.hud.showWaveNotification(w);
       this.audio.playWaveStart();
+
+      // Atualiza round na arma (desbloqueia armas, aumenta reservas)
+      this.weapon.setRound(w);
+
+      // Notifica novidades de armas no HUD
+      this._notifyNewWeapons(w);
     };
 
-    // Registra targets de raycasting para a arma
     this.weapon.targets = this.enemyManager.getTargetMeshes();
 
     // ── Estatísticas ────────────────────────────────────────
-    this._score      = 0;
-    this._kills      = 0;
+    this._score  = 0;
+    this._kills  = 0;
 
     // ── HUD inicial ─────────────────────────────────────────
     this.hud.setHealth(this.player.health, this.player.maxHealth);
@@ -159,17 +158,21 @@ export class Game {
       this.weapon.ammoInfo.maxMag
     );
     this.hud.setScore(0);
+    this.hud.setWeaponName(this.weapon.weaponName);
   }
 
   _destroyWorld() {
-    // Remove todos os objetos da cena
     while (this.scene.children.length > 0) {
       this.scene.remove(this.scene.children[0]);
     }
     this.enemyManager?.reset();
     this.particles?.dispose();
-    this.input.onShoot  = null;
-    this.input.onReload = null;
+    this.input.onShoot       = null;
+    this.input.onReload      = null;
+    this.input.onWeaponSelect = null;
+
+    // Remove HUD de seleção de arma
+    document.getElementById('weaponSelectHUD')?.remove();
   }
 
   // ── Loop principal ────────────────────────────────────────
@@ -177,10 +180,8 @@ export class Game {
   _update(dt) {
     if (this.state !== GAME_STATE.PLAYING) return;
 
-    // ── Player ────────────────────────────────────────────
     this.player.update(dt);
 
-    // ── Arma ─────────────────────────────────────────────
     this.weapon.targets = this.enemyManager.getTargetMeshes();
     this.weapon.update(
       dt,
@@ -190,16 +191,12 @@ export class Game {
       this.player._isMoving
     );
 
-    // ── Inimigos ──────────────────────────────────────────
     this.enemyManager.update(dt, this.player.position, this.camera);
 
-    // ── Dano de contato dos inimigos ───────────────────────
     this._checkEnemyContactDamage(dt);
 
-    // ── Partículas ────────────────────────────────────────
     this.particles.update(dt);
 
-    // ── HUD ──────────────────────────────────────────────
     this.hud.update(dt, this.weapon);
   }
 
@@ -227,8 +224,26 @@ export class Game {
     );
   }
 
+  _onAmmoCollect(amount) {
+    this.weapon.addAmmo(amount);
+    this.hud.showAmmoPickup(amount);
+    this.audio.playAmmoPickup?.();
+  }
+
   _onWaveComplete(wave) {
     console.log(`[Game] Onda ${wave} completa!`);
+  }
+
+  _notifyNewWeapons(wave) {
+    const available = getAvailableWeapons(wave);
+    const prevAvail = getAvailableWeapons(wave - 1);
+    const newWeapons = available.filter(w => !prevAvail.find(p => p.id === w.id));
+
+    if (newWeapons.length > 0) {
+      for (const w of newWeapons) {
+        this.hud.showUnlockNotification(`🔫 Nova arma desbloqueada: ${w.name}!`);
+      }
+    }
   }
 
   _onPlayerHurt(damage) {
@@ -243,7 +258,6 @@ export class Game {
 
     const durationSec = Math.floor((Date.now() - this._gameStartTime) / 1000);
 
-    // ── Envia score para o backend ────────────────────────
     let newRank  = null;
     let rankTier = null;
     const player = Session.get();
@@ -274,12 +288,10 @@ export class Game {
       );
       this.input.releaseLock();
 
-      // Atualiza leaderboard e perfil no menu
       await this.menuUI.refresh();
     }, 800);
   }
 
-  /** Dano de contato contínuo dos inimigos */
   _checkEnemyContactDamage(dt) {
     const attackers = this.enemyManager.getAttackingEnemies(
       this.player.position,
@@ -309,7 +321,6 @@ export class Game {
     }
   }
 
-  /** Clique no canvas para requestLock quando pausado */
   handleCanvasClick() {
     if (this.state === GAME_STATE.PAUSED) {
       this.input.requestLock(this._canvas);

@@ -335,51 +335,8 @@ app.get('/api/stats', (req, res) => {
   res.json(DB.getGlobalStats());
 });
 
-// ── Seed de dados demo (apenas em dev) ───────────────────────────────────────
-function seedDemoData() {
-  const demos = [
-    { nick: 'ShadowSniper', score: 125400, kills: 340, wave: 18 },
-    { nick: 'NeonReaper',   score: 98700,  kills: 280, wave: 15 },
-    { nick: 'BloodHawk',    score: 87200,  kills: 241, wave: 13 },
-    { nick: 'VoidHunter',   score: 76500,  kills: 210, wave: 12 },
-    { nick: 'DarkPhoenix',  score: 65300,  kills: 192, wave: 10 },
-    { nick: 'IronGhost',    score: 55900,  kills: 168, wave: 9  },
-    { nick: 'CrimsonAce',   score: 49800,  kills: 145, wave: 8  },
-    { nick: 'StealthWolf',  score: 42300,  kills: 131, wave: 7  },
-    { nick: 'BlazeRaider',  score: 38700,  kills: 118, wave: 7  },
-    { nick: 'PhantomX',     score: 35100,  kills: 109, wave: 6  },
-    { nick: 'RavenStrike',  score: 31200,  kills: 97,  wave: 6  },
-    { nick: 'FrostByte',    score: 28900,  kills: 88,  wave: 5  },
-    { nick: 'QuantumKill',  score: 26400,  kills: 82,  wave: 5  },
-    { nick: 'NightStalker', score: 24100,  kills: 76,  wave: 4  },
-    { nick: 'ArcLight',     score: 21800,  kills: 70,  wave: 4  },
-    { nick: 'CyberWulf',    score: 19500,  kills: 63,  wave: 4  },
-    { nick: 'TurboShot',    score: 17200,  kills: 57,  wave: 3  },
-    { nick: 'HellBender',   score: 15100,  kills: 50,  wave: 3  },
-    { nick: 'ZeroSight',    score: 12900,  kills: 44,  wave: 3  },
-    { nick: 'PixelGunner',  score: 10800,  kills: 38,  wave: 2  },
-  ];
-
-  for (const d of demos) {
-    if (!DB.getPlayerByNick(d.nick)) {
-      const p = DB.upsertPlayer(d.nick);
-      // Múltiplas partidas para ter score acumulado
-      for (let i = 0; i < 3; i++) {
-        DB.submitScore({
-          playerId:   p.id,
-          score:      Math.floor(d.score * (0.7 + Math.random() * 0.6)),
-          kills:      Math.floor(d.kills * (0.7 + Math.random() * 0.6)),
-          waveReached: d.wave,
-          durationSec: 180 + Math.floor(Math.random() * 300),
-        });
-      }
-    }
-  }
-  console.log('[Seed] Demo data OK');
-}
-
 // ── Start ─────────────────────────────────────────────────────────────────────
-seedDemoData();
+// Seed de dados demo REMOVIDO — ranking zerado, apenas jogadores reais aparecem.
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🔫 Shadow Strike API — porta ${PORT}`);

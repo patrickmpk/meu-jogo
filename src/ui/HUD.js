@@ -26,6 +26,65 @@ export class HUD {
     this._hitFlashTimer = 0;
     this._waveTimer     = 0;
     this._maxMag        = 30;
+
+    // ── Cria elemento de nome de arma ────────────────────────
+    this._createWeaponNameEl();
+    // ── Cria elemento de notificação de unlock ──────────────
+    this._createUnlockNotifEl();
+  }
+
+  _createWeaponNameEl() {
+    let el = document.getElementById('weaponNameHUD');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'weaponNameHUD';
+      el.style.cssText = `
+        position: fixed;
+        bottom: 68px;
+        right: 24px;
+        color: #fff;
+        font-family: monospace;
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        text-shadow: 0 1px 4px #000;
+        pointer-events: none;
+        z-index: 100;
+        opacity: 0.85;
+      `;
+      document.body.appendChild(el);
+    }
+    this._weaponNameEl = el;
+  }
+
+  _createUnlockNotifEl() {
+    let el = document.getElementById('unlockNotifHUD');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'unlockNotifHUD';
+      el.style.cssText = `
+        position: fixed;
+        top: 120px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(255,165,0,0.85);
+        color: #000;
+        font-family: monospace;
+        font-size: 0.95rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        padding: 8px 24px;
+        border-radius: 8px;
+        pointer-events: none;
+        z-index: 200;
+        opacity: 0;
+        transition: opacity 0.3s;
+        text-align: center;
+      `;
+      document.body.appendChild(el);
+    }
+    this._unlockNotifEl = el;
   }
 
   // ── Visibilidade ──────────────────────────────────────────
@@ -33,19 +92,72 @@ export class HUD {
   show() { this._hud.style.display = 'block'; }
   hide() { this._hud.style.display = 'none';  }
 
+  // ── Nome da arma ──────────────────────────────────────────
+
+  setWeaponName(name) {
+    if (this._weaponNameEl) {
+      this._weaponNameEl.textContent = `🔫 ${name}`;
+    }
+  }
+
+  // ── Notificação de unlock de arma ─────────────────────────
+
+  showUnlockNotification(msg) {
+    if (!this._unlockNotifEl) return;
+    this._unlockNotifEl.textContent = msg;
+    this._unlockNotifEl.style.opacity = '1';
+    clearTimeout(this._unlockTimeout);
+    this._unlockTimeout = setTimeout(() => {
+      this._unlockNotifEl.style.opacity = '0';
+    }, 3500);
+  }
+
+  // ── Notificação de ammo pickup ────────────────────────────
+
+  showAmmoPickup(amount) {
+    const el = document.createElement('div');
+    el.style.cssText = `
+      position: fixed;
+      bottom: 120px;
+      right: 24px;
+      color: #FFD700;
+      font-family: monospace;
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-shadow: 0 0 8px #FFD700, 0 1px 4px #000;
+      pointer-events: none;
+      z-index: 200;
+      animation: ammoPickupAnim 1.2s forwards;
+    `;
+    el.textContent = `+${amount} MUNIÇÃO`;
+    document.body.appendChild(el);
+
+    // Injeta animação se não existir
+    if (!document.getElementById('ammoPickupStyle')) {
+      const style = document.createElement('style');
+      style.id = 'ammoPickupStyle';
+      style.textContent = `
+        @keyframes ammoPickupAnim {
+          0%   { opacity:1; transform: translateY(0); }
+          70%  { opacity:1; transform: translateY(-30px); }
+          100% { opacity:0; transform: translateY(-50px); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    setTimeout(() => el.remove(), 1300);
+  }
+
   // ── Vida ─────────────────────────────────────────────────
 
-  /**
-   * @param {number} hp    - vida atual
-   * @param {number} maxHp - vida máxima
-   */
   setHealth(hp, maxHp) {
     const pct = Math.max(0, hp / maxHp) * 100;
     this._healthVal.textContent = Math.ceil(hp);
 
     this._healthFill.style.width = `${pct}%`;
 
-    // Cor da barra por % de vida
     if (pct > 60) {
       this._healthFill.style.background = 'linear-gradient(90deg,#4caf50,#8bc34a)';
       this._healthVal.style.color = '#4caf50';
@@ -55,28 +167,20 @@ export class HUD {
     } else {
       this._healthFill.style.background = 'linear-gradient(90deg,#f44336,#e91e63)';
       this._healthVal.style.color = '#f44336';
-      // Pulsa quando vida baixa
       this._healthVal.style.animation = pct < 15 ? 'none' : '';
     }
   }
 
   // ── Munição ───────────────────────────────────────────────
 
-  /**
-   * @param {number} mag     - balas no pente
-   * @param {number} reserve - balas na reserva
-   * @param {number} maxMag  - tamanho máximo do pente
-   */
   setAmmo(mag, reserve, maxMag) {
     this._maxMag = maxMag;
     this._ammoVal.textContent = `${mag} / ${reserve}`;
 
-    // Cor de aviso
     if (mag <= 5)       this._ammoVal.style.color = '#f44336';
     else if (mag <= 10) this._ammoVal.style.color = '#ff9800';
     else                this._ammoVal.style.color = '#fff';
 
-    // Ícones de bala
     this._ammoIcons.innerHTML = '';
     for (let i = 0; i < Math.min(maxMag, 30); i++) {
       const span = document.createElement('span');
@@ -89,13 +193,9 @@ export class HUD {
 
   setScore(score) {
     this._scoreVal.textContent = score.toLocaleString('pt-BR');
-
-    // Efeito de scale pop
     this._scoreVal.style.transform = 'scale(1.4)';
     this._scoreVal.style.transition = 'transform .15s';
-    setTimeout(() => {
-      this._scoreVal.style.transform = 'scale(1)';
-    }, 150);
+    setTimeout(() => { this._scoreVal.style.transform = 'scale(1)'; }, 150);
   }
 
   // ── Onda ─────────────────────────────────────────────────
@@ -115,11 +215,6 @@ export class HUD {
 
   // ── Recarga ───────────────────────────────────────────────
 
-  /**
-   * @param {boolean} reloading
-   * @param {number}  progress  - 0 a 1
-   * @param {number}  duration  - duração total em ms (para transition)
-   */
   setReloading(reloading, progress, duration = 1800) {
     if (reloading) {
       this._reloadBar.style.display = 'block';
@@ -131,7 +226,7 @@ export class HUD {
     }
   }
 
-  // ── Hit flash (dano) ─────────────────────────────────────
+  // ── Hit flash ─────────────────────────────────────────────
 
   triggerHitFlash() {
     this._hitFlash.style.opacity = '0.5';
@@ -149,7 +244,6 @@ export class HUD {
     div.textContent = `☠ ${msg}`;
     this._killFeed.appendChild(div);
 
-    // Remove após animação
     setTimeout(() => {
       if (div.parentNode) div.parentNode.removeChild(div);
     }, 2600);
@@ -163,13 +257,6 @@ export class HUD {
 
   // ── Game Over ─────────────────────────────────────────────
 
-  /**
-   * @param {number}      score
-   * @param {number}      wave
-   * @param {number}      kills
-   * @param {number|null} rank      - posição no ranking (opcional)
-   * @param {object|null} rankTier  - objeto da tier (opcional)
-   */
   showGameOver(score, wave, kills, rank = null, rankTier = null) {
     this._gameOverPanel.style.display = 'flex';
 
@@ -212,10 +299,8 @@ export class HUD {
   }
 
   // ── Update por frame ─────────────────────────────────────
-  // Chamado pelo loop principal para quaisquer atualizações de frame
 
   update(dt, weapon) {
-    // Atualiza barra de recarga em tempo real
     if (weapon.isReloading) {
       this.setReloading(true, weapon.reloadProgress);
     } else if (this._reloadBar.style.display !== 'none') {

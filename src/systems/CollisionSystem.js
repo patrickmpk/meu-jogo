@@ -96,9 +96,11 @@ export class CollisionSystem {
    * @param {number}         maxDist
    * @returns {{ object: THREE.Object3D, distance: number, point: THREE.Vector3 }|null}
    */
-  raycastFromCamera(camera, targets, maxDist = 80) {
-    // Direção para o centro da tela (normalizada, no espaço da câmera)
-    this._raycaster.setFromCamera({ x: 0, y: 0 }, camera);
+  raycastFromCamera(camera, targets, maxDist = 80, spread = 0) {
+    // Direção para o centro da tela com spread opcional (para escopeta)
+    const sx = spread > 0 ? (Math.random() - 0.5) * spread * 2 : 0;
+    const sy = spread > 0 ? (Math.random() - 0.5) * spread * 2 : 0;
+    this._raycaster.setFromCamera({ x: sx, y: sy }, camera);
     this._raycaster.far = maxDist;
 
     const hits = this._raycaster.intersectObjects(targets, true);

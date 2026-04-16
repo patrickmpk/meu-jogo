@@ -31,6 +31,8 @@ export class InputManager {
     this.onShoot  = null;
     /** @type {Function|null} chamado ao pressionar R */
     this.onReload = null;
+    /** @type {Function|null} chamado ao pressionar 1-7 para trocar arma (index 0-based) */
+    this.onWeaponSelect = null;
 
     this._bindEvents();
   }
@@ -62,6 +64,14 @@ export class InputManager {
 
     if (e.code === 'KeyR' && this.pointerLocked) {
       this.onReload?.();
+    }
+
+    // Teclas numéricas 1–7 para seleção de arma
+    if (this.pointerLocked && this.onWeaponSelect) {
+      const numMatch = e.code.match(/^Digit([1-7])$/);
+      if (numMatch) {
+        this.onWeaponSelect(parseInt(numMatch[1]) - 1);
+      }
     }
 
     // Previne scroll da página com setas / espaço
