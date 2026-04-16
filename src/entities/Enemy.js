@@ -65,6 +65,7 @@ export class Enemy {
     this._walkTimer      = Math.random() * Math.PI * 2;
     this._deathTimer     = 0;
     this._deathDuration  = 0.55; // duração total da animação de morte
+    this.removed         = false; // flag: grupo já foi removido da cena
 
     // ── Callbacks ──────────────────────────────────────────
     /** @type {Function|null} onAttack(damage) */
@@ -185,10 +186,8 @@ export class Enemy {
   // ── Update ─────────────────────────────────────────────────
 
   update(dt, playerPos, camera, collision) {
-    if (!this.alive) {
-      this._updateDeath(dt);
-      return;
-    }
+    // Quando morto, a animação é controlada pelo EnemyManager via _updateDeath()
+    if (!this.alive) return;
 
     const distSq = this.position.distanceToSquared(playerPos);
     const dist   = Math.sqrt(distSq);
@@ -294,8 +293,9 @@ export class Enemy {
   }
 
   _die() {
-    this.alive = false;
-    this.state = STATE.DEAD;
+    this.alive   = false;
+    this.removed = false;          // ainda não foi removido da cena
+    this.state   = STATE.DEAD;
     this._deathTimer = this._deathDuration;
     this._hpBar.visible = false;
 
@@ -306,10 +306,14 @@ export class Enemy {
   // ── Animação de morte: cai rapidamente e desaparece ───────
 
   _updateDeath(dt) {
-    if (this._deathTimer <= 0) return;
+    // Já foi removido da cena — não faz nada
+    if (this.removed) return;
 
     this._deathTimer -= dt;
-    const progress = 1 - (this._deathTimer / this._deathDuration); // 0 → 1
+
+    // progress vai de 0 (recém morreu) a 1 (fim da animação)
+    const rawProgress = 1 - (this._deathTimer / this._deathDuration);
+    const progress    = Math.min(1, Math.max(0, rawProgress));
 
     // Cai para frente
     this._group.rotation.x = progress * Math.PI * 0.55;
@@ -324,17 +328,17 @@ export class Enemy {
       this._group.scale.setScalar(sc);
     }
 
-    // Flash vermelho no começo
+    // Flash vermelho logo no início
     if (progress < 0.15) {
-      const allParts = this._group.children;
-      allParts.forEach(p => {
+      this._group.children.forEach(p => {
         if (p.material?.color) p.material.color.set(0xff4400);
       });
     }
 
-    // Remove quando acabar
+    // Animação concluída — remove da cena uma única vez
     if (this._deathTimer <= 0) {
       this.scene.remove(this._group);
+      this.removed = true;
     }
   }
 
@@ -352,7 +356,10 @@ export class Enemy {
   // ── Dispose ─────────────────────────────────────────────────
 
   dispose() {
-    this.scene.remove(this._group);
+    if (!this.removed) {
+      this.scene.remove(this._group);
+      this.removed = true;
+    }
   }
 
   get mesh()      { return this._group; }

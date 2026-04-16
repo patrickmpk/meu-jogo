@@ -46,6 +46,9 @@ export class EnemyManager {
     /** @type {Enemy[]} lista de inimigos vivos */
     this.enemies  = [];
 
+    /** @type {Enemy[]} inimigos mortos ainda em animação de morte */
+    this._dying   = [];
+
     /** @type {AmmoBox[]} caixas de munição ativas */
     this.ammoxBoxes = [];
 
@@ -114,7 +117,8 @@ export class EnemyManager {
       if (this._betweenDelay <= 0) {
         this.startWave(this.currentWave + 1);
       }
-      // Atualiza caixas de munição mesmo entre ondas
+      // Continua atualizando mortos em animação e caixas de munição
+      this._updateDying(dt);
       this._updateAmmoBoxes(dt, playerPos, camera);
       return;
     }
@@ -136,9 +140,14 @@ export class EnemyManager {
       const e = this.enemies[i];
       e.update(dt, playerPos, camera, this.collision);
       if (!e.alive) {
+        // Move para a lista de morrendo para continuar a animação
+        this._dying.push(e);
         this.enemies.splice(i, 1);
       }
     }
+
+    // ── Atualiza inimigos em animação de morte ─────────────
+    this._updateDying(dt);
 
     // ── Separação entre inimigos ───────────────────────────
     this._separate();
@@ -152,6 +161,18 @@ export class EnemyManager {
       this._waveActive   = false;
       this._betweenDelay = 5;
       this.onWaveComplete?.(this.currentWave);
+    }
+  }
+
+  // ── Atualiza inimigos em animação de morte ────────────────
+
+  _updateDying(dt) {
+    for (let i = this._dying.length - 1; i >= 0; i--) {
+      const e = this._dying[i];
+      e._updateDeath(dt);
+      if (e.removed) {
+        this._dying.splice(i, 1);
+      }
     }
   }
 
@@ -286,9 +307,11 @@ export class EnemyManager {
   // ── Reset ─────────────────────────────────────────────────
 
   reset() {
-    for (const e of this.enemies)   e.dispose();
+    for (const e of this.enemies)  e.dispose();
+    for (const e of this._dying)   e.dispose();
     for (const b of this.ammoxBoxes) b.dispose();
     this.enemies     = [];
+    this._dying      = [];
     this.ammoxBoxes  = [];
     this._toSpawn    = 0;
     this._waveActive = false;
